@@ -97,7 +97,7 @@ func (p Plex) buildHostUrl(path string) (string, error) {
 	return url.JoinPath(p.hostUrl.String(), path)
 }
 
-func (p Plex) RefreshSeason(libraryKey, path string, season int) error {
+func (p Plex) RefreshSeason(libraryKey, path string, season *int) error {
 	url, err := p.buildHostUrl("library/sections/" + libraryKey + "/refresh")
 	if err != nil {
 		return err
@@ -108,7 +108,9 @@ func (p Plex) RefreshSeason(libraryKey, path string, season int) error {
 		return err
 	}
 
-	path = path + "/Season " + strconv.Itoa(season)
+	if season != nil {
+		path = path + "/Season " + strconv.Itoa(*season)
+	}
 
 	q := req.URL.Query()
 	q.Add("path", path)

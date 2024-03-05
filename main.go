@@ -105,12 +105,14 @@ func main() {
 			}
 		}
 
-		// Extract season number
+		// Get season number
+		var seasonNumber *int = nil
 		if len(body.Episodes) > 0 {
-			seasonNumber := body.Episodes[0].SeasonNumber
-			for _, libraryId := range libraryIds {
-				err = plexService.RefreshSeason(libraryId, plexPath, seasonNumber)
-			}
+			seasonNumber = &body.Episodes[0].SeasonNumber
+		}
+
+		for _, libraryId := range libraryIds {
+			err = plexService.RefreshSeason(libraryId, plexPath, seasonNumber)
 		}
 
 		return c.String(http.StatusOK, "Request recieved from "+serviceName)
