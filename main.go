@@ -1,26 +1,34 @@
 package main
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 
 	"github.com/ReidMason/plex-autoscan/internal/config"
+	"github.com/ReidMason/plex-autoscan/internal/logger"
 	"github.com/ReidMason/plex-autoscan/internal/plex"
 	"github.com/ReidMason/plex-autoscan/internal/sonarr"
 	"github.com/labstack/echo"
 )
 
 func main() {
-	var config = config.LoadConfig()
+	log := logger.NewLogger()
+
+	log.Info("Starting plex-autoscan")
+
+	config, err := config.NewConfig(log)
+	if err != nil {
+		panic(err)
+	}
+
+	plexService := plex.NewPlex(log)
 
 	client := &http.Client{}
-	plexService := plex.NewPlex()
-	log.Println("Initializing plex")
-
-	err := plexService.Initialize(config.PlexToken, config.PlexHost, config.PlexPort, client)
+	err = plexService.Initialize(config.PlexToken, config.PlexHost, config.PlexPort, client)
 	if err != nil {
-		log.Fatal("Failed to initialize plex", err)
+		log.Error("Failed to initialize plex service")
+		return
 	}
 
 	e := echo.New()
@@ -28,15 +36,19 @@ func main() {
 	e.POST("/notify/:service", func(c echo.Context) error {
 		serviceName := c.Param("service")
 
-		log.Println("Request recieved from " + serviceName)
+		log.Info("Received request", slog.String("ServiceName", serviceName))
 		var body sonarr.SonarrWebhookBody
 		err := c.Bind(&body)
 		if err != nil {
+			body := c.Request().Body
+			log.Error("Failed to bind request body", slog.Any("error", err), slog.Any("body", body))
 			return c.String(http.StatusBadRequest, "Invalid request body")
 		}
 
-		log.Println("Event type:", body.EventType)
+		log.Debug("Received body", slog.Any("body", body))
+
 		if body.EventType == "Test" {
+			log.Info("Test request received from " + serviceName)
 			return c.String(http.StatusOK, "Test request received from "+serviceName)
 		}
 
@@ -45,12 +57,13 @@ func main() {
 
 		libraries, err := plexService.GetLibraries()
 		if err != nil {
+			log.Error("Failed to get libraries", slog.Any("error", err))
 			return c.String(http.StatusInternalServerError, "Failed to get libraries")
 		}
 
 		// Find relevant library ids
+		log.Info("Received path", slog.String("sonarrPath", sonarrPath), slog.String("plexPath", plexPath))
 		libraryIds := make([]string, 0)
-		log.Println("Plex path:", plexPath)
 		for _, library := range libraries {
 			for _, location := range library.Locations {
 				if strings.HasPrefix(plexPath, location.Path) {
@@ -60,14 +73,20 @@ func main() {
 			}
 		}
 
+		if len(libraryIds) == 0 {
+			log.Error("No libraries found for path", slog.String("path", plexPath))
+			return c.String(http.StatusBadRequest, "No library found for path")
+		}
+
 		// Get season number
 		var seasonNumber *int = nil
 		if len(body.Episodes) > 0 {
+			log.Info("Found a season number", slog.Int("seasonNumber", body.Episodes[0].SeasonNumber))
 			seasonNumber = &body.Episodes[0].SeasonNumber
 		}
 
-		for _, libraryId := range libraryIds {
-			err = plexService.RefreshSeason(libraryId, plexPath, seasonNumber)
+		for _, library := range libraryIds {
+			err = plexService.RescanPath(library, plexPath, seasonNumber)
 		}
 
 		return c.String(http.StatusOK, "Request recieved from "+serviceName)

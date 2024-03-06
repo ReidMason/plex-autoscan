@@ -4,11 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"log"
 	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
+
+	"github.com/ReidMason/plex-autoscan/internal/logger"
 )
 
 type HttpClient interface {
@@ -17,22 +18,24 @@ type HttpClient interface {
 
 type Plex struct {
 	client  HttpClient
+	log     logger.Logger
 	hostUrl *url.URL
 	token   string
 }
 
-func NewPlex() *Plex {
-	return &Plex{}
+func NewPlex(log logger.Logger) *Plex {
+	return &Plex{log: log}
 }
 
 func (p *Plex) Initialize(token, host string, port int, client HttpClient) error {
+	p.log.Info("Initializing Plex", slog.String("host", host), slog.Int("port", port), slog.String("token", token))
 	hostUrl, err := url.Parse(host)
 	if err != nil {
+		p.log.Error("Failed to parse Plex host url", slog.Any("error", err))
 		return err
 	}
 	hostUrl.Host = hostUrl.Hostname() + ":" + strconv.Itoa(port)
 
-	log.Println("Initializing plex", hostUrl.String(), token)
 	p.token = token
 	p.hostUrl = hostUrl
 	p.client = client
@@ -55,56 +58,58 @@ func buildRequest(method, url, token string) (*http.Request, error) {
 	return req, nil
 }
 
-func makeRequest[T any](client HttpClient, request *http.Request) (T, error) {
-	var result T
-
-	if client == nil {
-		return result, errors.New("No client provided for Plex request")
+func makeRequest(p Plex, request *http.Request) (io.ReadCloser, error) {
+	if p.client == nil {
+		p.log.Error("No client provided for Plex request")
+		return nil, errors.New("No client provided for Plex request")
 	}
 
-	slog.Info("Making request", slog.String("url", request.URL.String()))
-	resp, err := client.Do(request)
+	slog.Debug("Making request", slog.String("url", request.URL.String()))
+	resp, err := p.client.Do(request)
 	if err != nil {
-		log.Println("Failed to make request", err)
-		return result, err
+		p.log.Error("Failed to make request", slog.Any("error", err))
+		return nil, err
 	}
 
 	if resp.StatusCode >= 400 {
-		log.Printf("Request failed: %s", resp.Status)
-		return result, errors.New("Request failed with status: " + resp.Status)
+		p.log.Error("Request failed", slog.String("status", resp.Status))
+		return nil, errors.New("Request failed with status: " + resp.Status)
 	}
 
-	defer resp.Body.Close()
-	return parseResponse[T](resp.Body)
+	return resp.Body, nil
 }
 
-func parseResponse[T any](responseBody io.ReadCloser) (T, error) {
+func parseResponse[T any](p Plex, responseBody io.ReadCloser) (T, error) {
 	var result T
 	body, err := io.ReadAll(responseBody)
 	if err != nil {
+		p.log.Error("Failed to read response body", slog.Any("error", err))
 		return result, err
 	}
 
 	if err := json.Unmarshal(body, &result); err != nil {
+		p.log.Error("Failed to unmarshal response body", slog.Any("error", err))
 		return result, err
 	}
 
 	return result, nil
 }
 
-func (p Plex) buildHostUrl(path string) (string, error) {
-	log.Println("Building host url", p.hostUrl, path)
+func (p Plex) buildRequestUrl(path string) (string, error) {
 	return url.JoinPath(p.hostUrl.String(), path)
 }
 
-func (p Plex) RefreshSeason(libraryKey, path string, season *int) error {
-	url, err := p.buildHostUrl("library/sections/" + libraryKey + "/refresh")
+func (p Plex) RescanPath(libraryKey, path string, season *int) error {
+	p.log.Info("Refreshing season", slog.String("libraryKey", libraryKey), slog.String("path", path), slog.Any("season", season))
+	url, err := p.buildRequestUrl("library/sections/" + libraryKey + "/refresh")
 	if err != nil {
+		p.log.Error("Failed to build Plex request url", slog.Any("error", err))
 		return err
 	}
 
 	req, err := buildRequest("GET", url, p.token)
 	if err != nil {
+		p.log.Error("Failed to build Plex request", slog.Any("error", err))
 		return err
 	}
 
@@ -116,12 +121,16 @@ func (p Plex) RefreshSeason(libraryKey, path string, season *int) error {
 	q.Add("path", path)
 	req.URL.RawQuery = q.Encode()
 
-	_, err = makeRequest[any](p.client, req)
+	_, err = makeRequest(p, req)
+	if err != nil {
+		p.log.Error("Failed to make Plex request", slog.Any("error", err))
+	}
+
 	return err
 }
 
 func (p Plex) GetLibraries() ([]Library, error) {
-	url, err := p.buildHostUrl("library/sections")
+	url, err := p.buildRequestUrl("library/sections")
 	if err != nil {
 		return nil, err
 	}
@@ -131,10 +140,11 @@ func (p Plex) GetLibraries() ([]Library, error) {
 		return nil, err
 	}
 
-	response, err := makeRequest[PlexResponse[[]Library]](p.client, req)
+	body, err := makeRequest(p, req)
 	if err != nil {
 		return nil, err
 	}
+	response, err := parseResponse[PlexResponse[[]Library]](p, body)
 
 	return response.MediaContainer.Directory, nil
 }
@@ -143,11 +153,17 @@ func (p Plex) GetCurrentUser() (PlexUser, error) {
 	var plexUser PlexUser
 	req, err := buildRequest("GET", "https://plex.tv/api/v2/user", p.token)
 	if err != nil {
-		log.Println("Failed to build request for GetCurrentUser", err)
+		p.log.Error("Failed to build request for GetCurrentUser", slog.Any("error", err))
 		return plexUser, err
 	}
 
-	return makeRequest[PlexUser](p.client, req)
+	body, err := makeRequest(p, req)
+	if err != nil {
+		p.log.Error("Failed to make request for GetCurrentUser", slog.Any("error", err))
+		return plexUser, err
+	}
+
+	return parseResponse[PlexUser](p, body)
 }
 
 type PlexResponse[T any] struct {
