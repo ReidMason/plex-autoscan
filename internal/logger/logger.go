@@ -17,7 +17,9 @@ type SLogger struct {
 }
 
 func NewLogger() *SLogger {
-	return &SLogger{logger: *slog.New(slog.NewJSONHandler(os.Stdout, nil))}
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+
+	return &SLogger{logger: *logger}
 }
 
 func (l *SLogger) Info(msg string, args ...any) {
