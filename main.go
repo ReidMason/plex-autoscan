@@ -1,63 +1,18 @@
 package main
 
 import (
-	"encoding/json"
 	"log"
 	"net/http"
-	"os"
 	"strings"
 
-	plex "github.com/ReidMason/plex-autoscan/internal"
+	"github.com/ReidMason/plex-autoscan/internal/config"
+	"github.com/ReidMason/plex-autoscan/internal/plex"
+	"github.com/ReidMason/plex-autoscan/internal/sonarr"
 	"github.com/labstack/echo"
 )
 
-type SonarrWebhookBody struct {
-	EventType      string `json:"eventType"`
-	InstanceName   string `json:"instanceName"`
-	ApplicationURL string `json:"applicationUrl"`
-	Episodes       []struct {
-		Title         string `json:"title"`
-		ID            int    `json:"id"`
-		EpisodeNumber int    `json:"episodeNumber"`
-		SeasonNumber  int    `json:"seasonNumber"`
-		SeriesID      int    `json:"seriesId"`
-		TvdbID        int    `json:"tvdbId"`
-	} `json:"episodes"`
-	Series struct {
-		Title    string `json:"title"`
-		Path     string `json:"path"`
-		Type     string `json:"type"`
-		ID       int    `json:"id"`
-		TvdbID   int    `json:"tvdbId"`
-		TvMazeID int    `json:"tvMazeId"`
-		Year     int    `json:"year"`
-	} `json:"series"`
-}
-
-type Config struct {
-	PlexHost  string `json:"plexHost"`
-	PlexToken string `json:"plexToken"`
-	PlexPort  int    `json:"plexPort"`
-}
-
-func loadConfig() Config {
-	file, err := os.Open("data/config.json")
-	if err != nil {
-		log.Fatal("Failed to open config file", err)
-	}
-	defer file.Close()
-	decoder := json.NewDecoder(file)
-	config := Config{}
-	err = decoder.Decode(&config)
-	if err != nil {
-		log.Fatal("Failed to decode config file", err)
-	}
-
-	return config
-}
-
 func main() {
-	var config = loadConfig()
+	var config = config.LoadConfig()
 
 	client := &http.Client{}
 	plexService := plex.NewPlex()
@@ -74,7 +29,7 @@ func main() {
 		serviceName := c.Param("service")
 
 		log.Println("Request recieved from " + serviceName)
-		var body SonarrWebhookBody
+		var body sonarr.SonarrWebhookBody
 		err := c.Bind(&body)
 		if err != nil {
 			return c.String(http.StatusBadRequest, "Invalid request body")
