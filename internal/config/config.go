@@ -2,8 +2,9 @@ package config
 
 import (
 	"encoding/json"
-	"log"
 	"os"
+
+	"github.com/ReidMason/plex-autoscan/internal/logger"
 )
 
 type Config struct {
@@ -12,18 +13,27 @@ type Config struct {
 	PlexPort  int    `json:"plexPort"`
 }
 
-func LoadConfig() Config {
-	file, err := os.Open("data/config.json")
-	if err != nil {
-		log.Fatal("Failed to open config file", err)
-	}
-	defer file.Close()
-	decoder := json.NewDecoder(file)
+func NewConfig(log logger.Logger) (Config, error) {
+	return loadConfig(log)
+}
+
+func loadConfig(log logger.Logger) (Config, error) {
 	config := Config{}
-	err = decoder.Decode(&config)
+
+	log.Info("Loading config from file")
+	file, err := os.Open("data/config.json")
+	defer file.Close()
 	if err != nil {
-		log.Fatal("Failed to decode config file", err)
+		log.Error("Failed to open config file", err)
+		return config, err
 	}
 
-	return config
+	decoder := json.NewDecoder(file)
+	err = decoder.Decode(&config)
+	if err != nil {
+		log.Error("Failed to decode config file", err)
+		return config, err
+	}
+
+	return config, nil
 }
