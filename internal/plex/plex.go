@@ -28,7 +28,7 @@ func NewPlex(log logger.Logger) *Plex {
 }
 
 func (p *Plex) Initialize(token, host string, port int, client HttpClient) error {
-	p.log.Info("Initializing Plex", slog.String("host", host), slog.Int("port", port), slog.String("token", token))
+	p.log.Info("Initializing Plex", slog.String("host", host), slog.Int("port", port))
 	hostUrl, err := url.Parse(host)
 	if err != nil {
 		p.log.Error("Failed to parse Plex host url", slog.Any("error", err))
