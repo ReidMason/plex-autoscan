@@ -1,6 +1,8 @@
 package logger
 
 import (
+	"io"
+	"log"
 	"log/slog"
 	"os"
 )
@@ -17,7 +19,19 @@ type SLogger struct {
 }
 
 func NewLogger() *SLogger {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	opts := &slog.HandlerOptions{
+		AddSource: true,
+	}
+
+	file, err := os.OpenFile("data/log.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Fatal("Failed to open log file", err)
+		panic(err)
+	}
+
+	multiWriter := io.MultiWriter(file, os.Stdout)
+
+	logger := slog.New(slog.NewJSONHandler(multiWriter, opts))
 
 	return &SLogger{logger: *logger}
 }
