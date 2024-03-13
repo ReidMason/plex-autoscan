@@ -21,3 +21,22 @@ services:
     volumes:
       - "./appdata/data:/data"
 ```
+
+Create a config file `config.json` inside the data directory\
+Example config
+
+```json
+{
+  "PlexHost": "http://192.168.1.1",
+  "PlexToken": "PLEX-TOKEN",
+  "PlexPort": 32400,
+  "Remappings": {
+    "sonarr": [
+      {
+        "from": "/tv",
+        "to": "/data"
+      }
+    ]
+  }
+}
+```
