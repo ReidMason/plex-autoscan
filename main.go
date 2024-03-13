@@ -53,7 +53,11 @@ func main() {
 		}
 
 		sonarrPath := body.Series.Path
-		plexPath := replacePath(sonarrPath)
+		plexPath := sonarrPath
+		remappings := config.Remappings[serviceName]
+		for _, remapping := range remappings {
+			plexPath = replacePath(sonarrPath, remapping)
+		}
 
 		libraries, err := plexService.GetLibraries()
 		if err != nil {
@@ -92,9 +96,9 @@ func main() {
 		return c.String(http.StatusOK, "Request recieved from "+serviceName)
 	})
 
-	e.Logger.Fatal(e.Start(":3030"))
+	e.Logger.Fatal(e.Start("localhost:3030"))
 }
 
-func replacePath(path string) string {
-	return strings.Replace(path, "/tv", "/data", 1)
+func replacePath(path string, remapping config.Remapping) string {
+	return strings.Replace(path, remapping.From, remapping.To, 1)
 }

@@ -20,7 +20,7 @@ type SLogger struct {
 
 func NewLogger() *SLogger {
 	opts := &slog.HandlerOptions{
-		AddSource: true,
+		// AddSource: true,
 	}
 
 	file, err := os.OpenFile("data/log.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)

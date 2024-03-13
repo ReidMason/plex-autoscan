@@ -8,9 +8,15 @@ import (
 )
 
 type Config struct {
-	PlexHost  string `json:"plexHost"`
-	PlexToken string `json:"plexToken"`
-	PlexPort  int    `json:"plexPort"`
+	Remappings map[string][]Remapping `json:"remappings"`
+	PlexHost   string                 `json:"plexHost"`
+	PlexToken  string                 `json:"plexToken"`
+	PlexPort   int                    `json:"plexPort"`
+}
+
+type Remapping struct {
+	From string `json:"from"`
+	To   string `json:"to"`
 }
 
 func NewConfig(log logger.Logger) (Config, error) {
