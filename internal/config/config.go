@@ -7,11 +7,13 @@ import (
 	"github.com/ReidMason/plex-autoscan/internal/logger"
 )
 
+type Remappings map[string][]Remapping
+
 type Config struct {
-	Remappings map[string][]Remapping `json:"remappings"`
-	PlexHost   string                 `json:"plexHost"`
-	PlexToken  string                 `json:"plexToken"`
-	PlexPort   int                    `json:"plexPort"`
+	Remappings Remappings `json:"remappings"`
+	PlexHost   string     `json:"plexHost"`
+	PlexToken  string     `json:"plexToken"`
+	PlexPort   int        `json:"plexPort"`
 }
 
 type Remapping struct {
