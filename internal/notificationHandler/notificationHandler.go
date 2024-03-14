@@ -30,11 +30,7 @@ func (nh NotificationHandler) ProcessNotification(body sonarr.SonarrWebhookBody,
 	}
 
 	sonarrPath := body.Series.Path
-	plexPath := sonarrPath
-	remappings := nh.remappings[serviceName]
-	for _, remapping := range remappings {
-		plexPath = replacePath(sonarrPath, remapping)
-	}
+	plexPath := remapPath(sonarrPath, nh.remappings[serviceName])
 
 	libraries, err := nh.plexService.GetLibraries()
 	if err != nil {
@@ -44,15 +40,7 @@ func (nh NotificationHandler) ProcessNotification(body sonarr.SonarrWebhookBody,
 
 	// Find relevant library ids
 	nh.log.Info("Received path", slog.String("sonarrPath", sonarrPath), slog.String("plexPath", plexPath))
-	libraryIds := make([]string, 0)
-	for _, library := range libraries {
-		for _, location := range library.Locations {
-			if strings.HasPrefix(plexPath, location.Path) {
-				libraryIds = append(libraryIds, library.Key)
-				break
-			}
-		}
-	}
+	libraryIds := findLibraryIds(libraries, plexPath)
 
 	if len(libraryIds) == 0 {
 		nh.log.Error("No libraries found for path", slog.String("path", plexPath))
@@ -73,6 +61,25 @@ func (nh NotificationHandler) ProcessNotification(body sonarr.SonarrWebhookBody,
 	return nil
 }
 
-func replacePath(path string, remapping config.Remapping) string {
-	return strings.Replace(path, remapping.From, remapping.To, 1)
+func findLibraryIds(libraries []plex.Library, plexPath string) []string {
+	libraryIds := make([]string, 0)
+	for _, library := range libraries {
+		for _, location := range library.Locations {
+			if strings.HasPrefix(plexPath, location.Path) {
+				libraryIds = append(libraryIds, library.Key)
+				break
+			}
+		}
+	}
+
+	return libraryIds
+}
+
+func remapPath(path string, remappings []config.Remapping) string {
+	plexPath := path
+	for _, remapping := range remappings {
+		plexPath = strings.Replace(path, remapping.From, remapping.To, 1)
+	}
+
+	return plexPath
 }
